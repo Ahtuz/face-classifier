@@ -108,7 +108,7 @@ def detect_faces_and_filter(image_list, image_classes_list=None):
 
     train_face_grays = []
     test_faces_rects = []
-    train_img_id = []
+    image_classes_list = []
 
     face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
@@ -122,9 +122,9 @@ def detect_faces_and_filter(image_list, image_classes_list=None):
             x, y, w, h = face
             test_faces_rects.append(face)
             train_face_grays.append(image[y:y+h , x:x+w])
-            train_img_id.append(image_classes_list[i])
+            image_classes_list.append(image_classes_list[i])
 
-    return train_face_grays, test_faces_rects, train_img_id
+    return train_face_grays, test_faces_rects, image_classes_list
 
 def train(train_face_grays, image_classes_list):
     '''
@@ -252,12 +252,12 @@ def combine_results(predicted_test_image_list):
         ndarray
             Array containing image data after being combined
     '''
-    ndarray = []
+    image = []
 
-    for image in predicted_test_image_list:
-        ndarray = np.hstack((img, image))
+    for predicted_image in predicted_test_image_list:
+        image = np.hstack((predicted_image))
         
-    return ndarray
+    return image
 
 def show_result(image):
     '''
@@ -269,7 +269,7 @@ def show_result(image):
             Array containing image data
     '''
 
-    cv2.imshow("results",image)
+    cv2.imshow("results", image)
     cv2.waitKey(0)
 
 '''
