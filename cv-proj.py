@@ -19,7 +19,7 @@ def get_path_list(root_path):
             root directory
     '''
 
-    root_path = 'dataset/train'
+    #root_path = 'dataset/train'
     train_names = []
 
     for name in os.listdir(root_path):
@@ -46,21 +46,19 @@ def get_class_names(root_path, train_names):
         list
             List containing all image classes id
     '''
-
     image_path_list = []
     image_classes_list = []
 
     for class_id, name in enumerate(os.listdir(root_path)):
         image_class_path = root_path + '/' + name
         # dataset/train/Aaron_Eckhart
-        image_classes_list.append(class_id)
-        # Aaron_Eckhart
 
         for image in os.listdir(image_class_path):
             image_path_list.append(root_path + '/' + name + '/' + image)
+            image_classes_list.append(class_id)
             # dataset/train/Aaron_Eckhart/Aaron_Eckhart_0001.jpg
 
-        return image_path_list, image_classes_list
+    return image_path_list, image_classes_list
 
 def get_train_images_data(image_path_list):
     '''
@@ -77,12 +75,12 @@ def get_train_images_data(image_path_list):
             List containing all loaded train images
     '''
 
-    image_list = []
+    train_image_list = []
 
-    for image in image_path_list:
-        image_list.append(cv2.imread(image, 0)) 
+    for imagepath in image_path_list:
+        train_image_list.append(cv2.imread(imagepath)) 
 
-    return image_list
+    return train_image_list
 
 def detect_faces_and_filter(image_list, image_classes_list=None):
     '''
@@ -105,26 +103,36 @@ def detect_faces_and_filter(image_list, image_classes_list=None):
         list
             List containing all filtered image classes id
     '''
-
     train_face_grays = []
     test_faces_rects = []
-    image_classes_list = []
+    filtered_classes_list = []
 
     face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 
     for i, image in enumerate(image_list):
-        detected_faces = face_cascade.detectMultiScale(image, scaleFactor=1.2, minNeighbors=5)
+        temp = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        detected_faces = face_cascade.detectMultiScale(temp, scaleFactor=1.2, minNeighbors=5)
 
-        if len(detected_faces) < 1:
+        if (len(detected_faces) != 1) :
             continue
             
         for face in detected_faces:
             x, y, w, h = face
-            test_faces_rects.append(face)
-            train_face_grays.append(image[y:y+h , x:x+w])
-            image_classes_list.append(image_classes_list[i])
 
-    return train_face_grays, test_faces_rects, image_classes_list
+            face_gray_rect = temp[y:y+h , x:x+w]
+            train_face_grays.append(face_gray_rect)
+
+            test_faces_rects.append(face)
+
+            if image_classes_list is not None:
+                
+                filtered_classes_list.append(image_classes_list[i])
+        
+            else:
+                filtered_classes_list.append([''])
+
+
+    return train_face_grays, test_faces_rects, filtered_classes_list
 
 def train(train_face_grays, image_classes_list):
     '''
@@ -142,11 +150,11 @@ def train(train_face_grays, image_classes_list):
         object
             Classifier object after being trained with cropped face images
     '''
-    classifier = cv2.face.LBPHFaceRecognizer_create()
+    face_detect_object = cv2.face.LBPHFaceRecognizer_create()
 
-    classifier.train(train_face_grays, np.array(image_classes_list))
+    face_detect_object.train(train_face_grays, np.array(image_classes_list))
 
-    return classifier
+    return face_detect_object
 
 def get_test_images_data(test_root_path, image_path_list):
     '''
@@ -164,13 +172,13 @@ def get_test_images_data(test_root_path, image_path_list):
         list
             List containing all loaded test images
     '''
-    image_list = []
+    test_image_list = []
 
     for image in os.listdir(test_root_path):
         
-        image_list.append(cv2.imread(image, 0))
+        test_image_list.append(cv2.imread(test_root_path+'/'+image))
 
-    return image_list
+    return test_image_list
 
 def predict(classifier, test_faces_gray):
     '''
@@ -188,16 +196,14 @@ def predict(classifier, test_faces_gray):
         list
             List containing all prediction results from given test faces
     '''
-    predict_results = []
+    result_list = []
 
     for image in test_faces_gray:
-        result, confidence = classifier.predict(image)
+        result, _ = classifier.predict(image)
 
-        confidence = math.floor(confidence * 100) / 100
+        result_list.append(result)
 
-        predict_results.append(str(result + " " + confidence + "% "))
-
-    return predict_results
+    return result_list
 
 
 def draw_prediction_results(predict_results, test_image_list, test_faces_rects, train_names):
@@ -222,19 +228,19 @@ def draw_prediction_results(predict_results, test_image_list, test_faces_rects, 
             prediction result
     ''' 
 
-    predicted_test_image_list = []
+    drawn_list = []
 
     for i,face in enumerate(test_faces_rects):
 
         x, y, w, h = face
 
-        cv2.rectangle(test_image_list[i], (x,y), (x+w,y+h), (255,0,255), 2)
+        cv2.rectangle(test_image_list[i], (x,y), (x+w,y+h), (0,255,0), 2)
 
-        predicted_test_image = cv2.putText(test_image_list[i], predict_results[i], (x,y-10), 2, 1, (255,255,255))
+        newimg = cv2.putText(test_image_list[i], train_names[predict_results[i]], (x,y-10), 1, 1, (0,255,0))
 
-        predicted_test_image_list.append(predicted_test_image)
+        drawn_list.append(newimg)
     
-    return predicted_test_image_list
+    return drawn_list
 
 
 def combine_results(predicted_test_image_list):
@@ -252,12 +258,15 @@ def combine_results(predicted_test_image_list):
         ndarray
             Array containing image data after being combined
     '''
-    image = []
+    
+    images = predicted_test_image_list
+    
+    final_image_result = images[0]
 
-    for predicted_image in predicted_test_image_list:
-        image = np.hstack((predicted_image))
-        
-    return image
+    for i in range(1, len(images)):
+        final_image_result = np.hstack((final_image_result, images[i]))
+
+    return final_image_result
 
 def show_result(image):
     '''
@@ -269,7 +278,7 @@ def show_result(image):
             Array containing image data
     '''
 
-    cv2.imshow("results", image)
+    cv2.imshow("results",image)
     cv2.waitKey(0)
 
 '''
@@ -294,9 +303,7 @@ if __name__ == "__main__":
         Modifiable
         -------------------
     '''
-
     train_root_path = "dataset/train"
-
     '''
         -------------------
         End of modifiable
@@ -317,9 +324,7 @@ if __name__ == "__main__":
         Modifiable
         -------------------
     '''
-
     test_root_path = "dataset/test"
-
     '''
         -------------------
         End of modifiable
